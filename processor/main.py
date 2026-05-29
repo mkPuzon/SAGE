@@ -16,7 +16,7 @@ from src.scraper import fetch_arxiv_papers
 from src.pdf_reader import download_and_extract_text
 from src.extractor import extract_keywords, extract_definitions
 from src.seed import upsert_keyword
-from src.cooccurrence import rebuild_cooccurrences
+from src.cooccurrence import rebuild_cooccurrences, update_cooccurrences
 
 DB_PATH = os.getenv("DB_PATH", "/data/db/sage.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/data/backups")
@@ -37,13 +37,13 @@ def clean_backups(today: str) -> None:
     print(f"{num_backups=}")
 
 
-def process_paper(paper: dict, engine) -> None:
+def process_paper(paper: dict, engine) -> list[str] | None:
     paper_id = paper["paper_id"]
 
     with Session(engine) as s:
         if s.get(Article, paper_id):
             print(f"  [{paper_id}] already in DB — skipping")
-            return
+            return None
 
     print(f"  [{paper_id}] {paper['title'][:70]}")
 
@@ -74,6 +74,7 @@ def process_paper(paper: dict, engine) -> None:
         s.commit()
 
     print("    → saved to DB")
+    return keywords
 
 
 def job():
@@ -88,9 +89,12 @@ def job():
     engine = get_engine(DB_PATH)
 
     print("---- 3. Extract keywords, definitions & insert into DB ----")
+    new_paper_keywords: list[list[str]] = []
     for i, paper in enumerate(papers):
         try:
-            process_paper(paper, engine)
+            kws = process_paper(paper, engine)
+            if kws:
+                new_paper_keywords.append(kws)
         except Exception as e:
             print(f"  [{paper.get('paper_id', '?')}] ERROR: {e}")
         if i < len(papers) - 1:
@@ -99,15 +103,26 @@ def job():
     print("---- 3. Backup DB ----")
     backup_db(today)
 
-    print("---- 4. Rebuild co-occurrence index ----")
+    print("---- 4. Update co-occurrence index ----")
     with Session(engine) as session:
-        rebuild_cooccurrences(session)
+        update_cooccurrences(session, new_paper_keywords)
+
+    print("---- 5. Clean old backups ----")
+
 
     print(f"Job complete for {today}.")
 
 
 if __name__ == "__main__":
     import schedule
+
+    # One-time reconciliation: full rebuild at the 2-paper threshold, one-shot
+    # never part of the scheduled job
+    # if len(sys.argv) > 1 and sys.argv[1] == "reconcile-cooccurrences":
+    #     engine = get_engine(DB_PATH)
+    #     with Session(engine) as session:
+    #         rebuild_cooccurrences(session, threshold=2)
+    #     sys.exit(0)
 
     try:
         job()

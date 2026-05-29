@@ -55,13 +55,15 @@ Each paper goes through this sequence inside `process_paper()` (`processor/main.
    ```
    All writes — the article row and all keyword upserts — are committed in a single transaction.
 
-6. **Cooccurrence rebuild** (`main.py:102–103`)
+6. **Cooccurrence incremental update** (`main.py`)
    ```python
    with Session(engine) as session:
-       rebuild_cooccurrences(session)
+       update_cooccurrences(session, new_paper_keywords)
    ```
-   Runs after all papers in the batch are processed. Full table wipe and rewrite.
-   Source: `processor/src/cooccurrence.py:9`
+   Runs after all papers in the batch are processed and committed. Only pairs
+   drawn from newly added papers are recomputed (no full table rewrite), and a
+   pair's row is written only once it shares ≥2 papers.
+   Source: `processor/src/cooccurrence.py`
 
 ---
 
@@ -152,26 +154,37 @@ Unlike `paper_references`, `dates` is never passed through a set. This is consis
 
 ## Cooccurrence Table
 
-`processor/src/cooccurrence.py:9`
+`processor/src/cooccurrence.py`
 
-The `keyword_cooccurrences` table is fully rebuilt after every processor job (and after seeding). It has no insert/update path — only wipe and rewrite.
+The `keyword_cooccurrences` table is updated **incrementally** after every processor job via `update_cooccurrences`, and only stores pairs that share **≥2 papers** (the relatedness threshold). A full wipe-and-rewrite (`rebuild_cooccurrences`) is reserved for seeding and the one-time reconciliation command.
 
-### Rebuild steps
+### Incremental update steps (`update_cooccurrences`)
 
-1. **Invert the keyword index**
-   Query all `Keyword` rows. For each keyword, iterate its `paper_references` JSON array and build a `paper_id → [keyword, ...]` map in memory.
+Papers are never removed, so a pair's shared-paper count only ever increases, and a pair can only change if both of its keywords appear in a *newly added* paper.
 
-2. **Count co-occurring pairs**
-   For each paper, generate all `(A, B)` pairs from its keyword list using `combinations(sorted(kws), 2)`. Both `(A, B)` and `(B, A)` are incremented so that every API query is a simple `WHERE keyword_a = ?` with no `OR` clause.
+1. **Collect affected pairs**
+   For each new paper's keyword set, generate all `(A, B)` pairs with `combinations(sorted(set(kws)), 2)` and gather them into a set (deduped across the batch).
 
-3. **Wipe and rewrite**
+2. **Recompute authoritative scores**
+   For each affected pair, score = `len(refs_a & refs_b)`, the intersection of the two keywords' already-committed `paper_references`. Recomputing (rather than `+= 1`) makes the update idempotent and self-correcting, and correctly handles a pair crossing from 1 → 2 shared papers (which has no pre-existing row to increment).
+
+3. **Upsert if ≥ threshold**
    ```python
-   session.query(KeywordCooccurrence).delete()
-   for (a, b), score in counts.items():
-       session.add(KeywordCooccurrence(keyword_a=a, keyword_b=b, score=score))
-   session.commit()
+   if score >= threshold:        # threshold = 2
+       _upsert_pair(session, a, b, score)
+       _upsert_pair(session, b, a, score)
    ```
-   The full table is deleted and repopulated in one transaction. The table is always consistent with the current `paper_references` data — there is no partial state.
+   Both `(A, B)` and `(B, A)` are written so every API query is a simple `WHERE keyword_a = ?` with no `OR` clause. Sub-threshold pairs are never stored, so there is nothing to delete.
+
+### Full rebuild / reconciliation (`rebuild_cooccurrences`)
+
+`rebuild_cooccurrences(session, threshold=2)` inverts the keyword index (`paper_id → [keyword, ...]`), counts every pair, wipes the table, and re-inserts only pairs with `score ≥ threshold`. Used by `seed()` and by the one-time command:
+
+```
+python main.py reconcile-cooccurrences
+```
+
+Run once against an existing DB to purge legacy score-1 rows. Idempotent.
 
 ### Schema
 
@@ -179,6 +192,6 @@ The `keyword_cooccurrences` table is fully rebuilt after every processor job (an
 |--------|------|-------|
 | `keyword_a` | `TEXT PK` | Source keyword (leading PK column — indexed) |
 | `keyword_b` | `TEXT PK` | Related keyword |
-| `score` | `INTEGER` | Number of papers referencing both keywords |
+| `score` | `INTEGER` | Number of papers referencing both keywords (always ≥2) |
 
 The composite primary key `(keyword_a, keyword_b)` gives O(log N) lookups by `keyword_a`. The API uses `WHERE keyword_a = ?` ordered by `score DESC LIMIT 10`.

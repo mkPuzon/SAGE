@@ -130,26 +130,26 @@ The sidebar on each keyword's detail panel shows terms that tend to appear toget
 
 ### How similarity is determined
 
-Two keywords are considered related if they were both extracted from the same paper. The `score` between keyword A and keyword B is simply the count of papers that reference both. A higher score means the two concepts co-occur more frequently and are more likely to be genuinely related. This is a **co-occurrence model**: no embedding vectors, no semantic similarity, no ML — just counting shared papers. It is fast to compute and trivial to interpret.
+Two keywords are considered related if they were both extracted from **at least 2 papers in common**. The `score` between keyword A and keyword B is the count of papers that reference both, and pairs that share only a single paper are not stored at all — this keeps the table lean and filters out incidental, one-off co-occurrences. A higher score means the two concepts co-occur more frequently and are more likely to be genuinely related. This is a **co-occurrence model**: no embedding vectors, no semantic similarity, no ML — just counting shared papers. It is fast to compute and trivial to interpret.
 
-### How the index is built
+### How the index is updated
 
-After every processor job (and after seeding), `processor/src/cooccurrence.py` runs a full rebuild:
+Each daily processor job updates the index **incrementally** via `update_cooccurrences` in `processor/src/cooccurrence.py`, rather than rebuilding the whole table:
 
-1. **Invert the index** — iterate every keyword's `paper_references` JSON array to build a `paper → [keywords]` map in memory.
-2. **Count pairs** — for each paper, generate all (A, B) pairs from its keyword list and increment `counts[(A, B)]`. Both `(A, B)` and `(B, A)` are stored so that every API query is a simple `WHERE keyword_a = ?` without a two-column OR.
-3. **Wipe and rewrite** — the entire `keyword_cooccurrences` table is deleted and repopulated in one transaction. This keeps the logic simple and the table always consistent with the current keyword data.
+1. **Find affected pairs** — only pairs of keywords that appear together in a *newly added* paper can change, because papers are never removed and a pair's shared-paper count only ever increases. The job collects each new paper's keyword set and generates the candidate (A, B) pairs.
+2. **Recompute authoritative scores** — for each affected pair, the true score is recomputed as the size of the set intersection of the two keywords' `paper_references` (already committed by the keyword upsert). This is idempotent and self-correcting, so duplicate pairs within a batch are harmless.
+3. **Upsert if ≥ threshold** — a pair's row (both `(A, B)` and `(B, A)`, so every API query is a simple `WHERE keyword_a = ?`) is written only when its score reaches 2. Sub-threshold pairs were never stored, so nothing needs to be deleted.
 
-The rebuild runs offline (inside the processor), never on the request path.
+`rebuild_cooccurrences(session, threshold=2)` still performs a full wipe-and-rewrite and is used for seeding and for the one-time reconciliation command (`python main.py reconcile-cooccurrences`), which purges any legacy score-1 rows from an existing DB. All of this runs offline (inside the processor), never on the request path.
 
 ### Scaling characteristics
 
 | Dimension | Behaviour |
 |-----------|-----------|
 | Query time | O(log N) — indexed PK lookup; unaffected by corpus size |
-| Rebuild time | O(K × d²) where K = keyword count, d = average papers per keyword — typically small because d is bounded by how prolific any single concept is |
+| Daily update time | O(p × k²) where p = new papers per run and k = keywords per paper (3) — independent of total corpus size, unlike the old full rebuild |
+| Full rebuild time | O(K × d²) where K = keyword count, d = average papers per keyword — only paid during seeding/reconciliation |
 | Table size | O(K × d) rows in practice (sparse); worst case O(K²) if every keyword co-occurs with every other |
-| Memory during rebuild | Entire `keywords` table loaded into memory to build the inverted index — fine for hundreds of thousands of keywords, but would need batching at tens of millions |
 
 
 ## Scraper Pipeline
@@ -270,11 +270,11 @@ pytest tests/
 # v2 Next steps
 Backend
 - [X] Complete search page functionality
-- [ ] Ensure proper date (most recent) is shown
-- [ ] Add threshold of 2 papers for cooccurence; keywords that only occurr in the same paper 1 time are not added to the table.
-- [ ] Implement incremental keyword cooccurnce updates instead of a total table rewrite
+- [x] Add threshold of 2 papers for cooccurence; keywords that only occurr in the same paper 1 time are not added to the table.
+- [x] Implement incremental keyword cooccurnce updates instead of a total table rewrite
 - [ ] Schedule deletion of backups
 - [ ] Add logging across processor and db operations
+
 - [ ] Revise prompts for more explicitly structured definitions
 - [ ] Generate two definition: one technical, one accessable
 
