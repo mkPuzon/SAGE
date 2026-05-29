@@ -35,7 +35,13 @@ def backup_db(today: str) -> None:
 def clean_backups(today: str) -> None:
     num_backups = sum(1 for entry in os.scandir(BACKUP_DIR) if entry.is_file())
     print(f"{num_backups=}")
-
+    if num_backups > 4:
+        files = sorted(
+            (e.path for e in os.scandir(BACKUP_DIR) if e.is_file() and e.name.startswith("sage_") and e.name.endswith(".db")),
+        )
+        oldest = files[0]
+        os.remove(oldest)
+        print(f"  Deleted old backup: {oldest}")
 
 def process_paper(paper: dict, engine) -> list[str] | None:
     paper_id = paper["paper_id"]
@@ -108,7 +114,7 @@ def job():
         update_cooccurrences(session, new_paper_keywords)
 
     print("---- 5. Clean old backups ----")
-
+    clean_backups(today)
 
     print(f"Job complete for {today}.")
 

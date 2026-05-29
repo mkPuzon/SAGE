@@ -272,7 +272,8 @@ Backend
 - [X] Complete search page functionality
 - [x] Add threshold of 2 papers for cooccurence; keywords that only occurr in the same paper 1 time are not added to the table.
 - [x] Implement incremental keyword cooccurnce updates instead of a total table rewrite
-- [ ] Schedule deletion of backups
+- [X] Schedule deletion of backups; only keep last 4 days worth
+
 - [ ] Add logging across processor and db operations
 
 - [ ] Revise prompts for more explicitly structured definitions
