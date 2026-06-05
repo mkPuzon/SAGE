@@ -35,8 +35,8 @@ def _parse_llm_response(raw: str):
     return ast.literal_eval(cleaned.strip())
 
 
-def extract_keywords(abstract: str) -> list[str]:
-    """Return 3 AI-research keywords extracted from an abstract."""
+def extract_keywords(abstract: str) -> tuple[list[str], str, object]:
+    """Return (keywords, model_name, usage) for an abstract."""
     response = _get_client().chat.completions.create(
         model=_KEYWORD_MODEL,
         messages=[{"role": "user", "content": _keyword_prompt() + abstract}],
@@ -46,7 +46,7 @@ def extract_keywords(abstract: str) -> list[str]:
     result = _parse_llm_response(raw)
     if not isinstance(result, list):
         raise ValueError(f"Expected list from keyword model, got: {type(result)}")
-    return [str(k) for k in result]
+    return [str(k) for k in result], response.model, response.usage
 
 
 def _flatten_definition(value) -> str | None:
@@ -64,8 +64,8 @@ def _flatten_definition(value) -> str | None:
     return str(value)
 
 
-def extract_definitions(paper_text: str, keywords: list[str]) -> dict[str, str | None]:
-    """Return a keyword→definition dict derived from the full paper text."""
+def extract_definitions(paper_text: str, keywords: list[str]) -> tuple[dict[str, str | None], str, object]:
+    """Return (definitions, model_name, usage) derived from the full paper text."""
     truncated = paper_text[:_MAX_PAPER_CHARS]
     prompt = (
         _definition_prompt()
@@ -82,4 +82,4 @@ def extract_definitions(paper_text: str, keywords: list[str]) -> dict[str, str |
     result = _parse_llm_response(raw)
     if not isinstance(result, dict):
         raise ValueError(f"Expected dict from definition model, got: {type(result)}")
-    return {k: _flatten_definition(v) for k, v in result.items()}
+    return {k: _flatten_definition(v) for k, v in result.items()}, response.model, response.usage

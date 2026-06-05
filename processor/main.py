@@ -17,9 +17,11 @@ from src.pdf_reader import download_and_extract_text
 from src.extractor import extract_keywords, extract_definitions
 from src.seed import upsert_keyword
 from src.cooccurrence import rebuild_cooccurrences, update_cooccurrences
+from src.logger import RunLogger
 
 DB_PATH = os.getenv("DB_PATH", "/data/db/sage.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/data/backups")
+LOG_DIR = os.getenv("LOG_DIR", "/data/logs")
 
 
 def backup_db(today: str) -> None:
@@ -43,7 +45,7 @@ def clean_backups(today: str) -> None:
         os.remove(oldest)
         print(f"  Deleted old backup: {oldest}")
 
-def process_paper(paper: dict, engine) -> list[str] | None:
+def process_paper(paper: dict, engine, logger: RunLogger) -> list[str] | None:
     paper_id = paper["paper_id"]
 
     with Session(engine) as s:
@@ -54,30 +56,36 @@ def process_paper(paper: dict, engine) -> list[str] | None:
     print(f"  [{paper_id}] {paper['title'][:70]}")
 
     print("    → extracting keywords from abstract")
-    keywords = extract_keywords(paper["abstract"])
+    with logger.time_paper_step(paper_id, "extract_keywords"):
+        keywords, kw_model, kw_usage = extract_keywords(paper["abstract"])
+    logger.record_openai_usage("extract_keywords", paper_id, kw_model, kw_usage)
     print(f"    → keywords: {keywords}")
 
     print("    → downloading PDF")
-    pdf_text = download_and_extract_text(paper["pdf_url"])
+    with logger.time_paper_step(paper_id, "download_pdf"):
+        pdf_text = download_and_extract_text(paper["pdf_url"])
     print(f"    → extracted {len(pdf_text):,} chars from PDF")
 
     print("    → extracting definitions")
-    definitions = extract_definitions(pdf_text, keywords)
+    with logger.time_paper_step(paper_id, "extract_definitions"):
+        definitions, def_model, def_usage = extract_definitions(pdf_text, keywords)
+    logger.record_openai_usage("extract_definitions", paper_id, def_model, def_usage)
 
-    with Session(engine) as s:
-        s.add(Article(**paper))
-        for kw in keywords:
-            definition = definitions.get(kw)
-            upsert_keyword(
-                s,
-                {
-                    "keyword": kw,
-                    "definition": definition or "Definition not available.",
-                    "paper_references": [paper_id],
-                    "dates": [paper["date_submitted"]],
-                },
-            )
-        s.commit()
+    with logger.time_paper_step(paper_id, "db_upsert"):
+        with Session(engine) as s:
+            s.add(Article(**paper))
+            for kw in keywords:
+                definition = definitions.get(kw)
+                upsert_keyword(
+                    s,
+                    {
+                        "keyword": kw,
+                        "definition": definition or "Definition not available.",
+                        "paper_references": [paper_id],
+                        "dates": [paper["date_submitted"]],
+                    },
+                )
+            s.commit()
 
     print("    → saved to DB")
     return keywords
@@ -85,38 +93,57 @@ def process_paper(paper: dict, engine) -> list[str] | None:
 
 def job():
     today = dt.datetime.today().strftime("%Y-%m-%d")
+    run_id = dt.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
     num_papers = 25
-    print(f"Running job to scrape {num_papers} paper for {today}...")
+    print(f"Running job to scrape {num_papers} papers for {today}...")
 
-    print("---- 1. Fetch metadata from arXiv ----")
-    papers = fetch_arxiv_papers("cs.AI", num_papers)
-    print(f"  Fetched {len(papers)} papers")
+    logger = RunLogger(run_id)
 
-    engine = get_engine(DB_PATH)
+    try:
+        print("---- 1. Fetch metadata from arXiv ----")
+        with logger.time_step("fetch_papers"):
+            papers = fetch_arxiv_papers("cs.AI", num_papers)
+        print(f"  Fetched {len(papers)} papers")
 
-    print("---- 3. Extract keywords, definitions & insert into DB ----")
-    new_paper_keywords: list[list[str]] = []
-    for i, paper in enumerate(papers):
-        try:
-            kws = process_paper(paper, engine)
-            if kws:
-                new_paper_keywords.append(kws)
-        except Exception as e:
-            print(f"  [{paper.get('paper_id', '?')}] ERROR: {e}")
-        if i < len(papers) - 1:
-            time.sleep(3)  # respect arXiv rate limit between papers
+        engine = get_engine(DB_PATH)
 
-    print("---- 3. Backup DB ----")
-    backup_db(today)
+        print("---- 2. Extract keywords, definitions & insert into DB ----")
+        new_paper_keywords: list[list[str]] = []
+        with logger.time_step("process_papers"):
+            for i, paper in enumerate(papers):
+                paper_id = paper.get("paper_id", "?")
+                try:
+                    t0 = time.perf_counter()
+                    kws = process_paper(paper, engine, logger)
+                    duration = round(time.perf_counter() - t0, 3)
+                    if kws is not None:
+                        new_paper_keywords.append(kws)
+                        logger.record_paper(paper_id, paper["title"], "processed", kws, duration)
+                    else:
+                        logger.record_paper(paper_id, paper["title"], "skipped")
+                except Exception as e:
+                    print(f"  [{paper_id}] ERROR: {e}")
+                    logger.record_paper(paper_id, paper.get("title", ""), "errored")
+                if i < len(papers) - 1:
+                    time.sleep(3)  # respect arXiv rate limit between papers
 
-    print("---- 4. Update co-occurrence index ----")
-    with Session(engine) as session:
-        update_cooccurrences(session, new_paper_keywords)
+        print("---- 3. Backup DB ----")
+        with logger.time_step("backup_db"):
+            backup_db(today)
 
-    print("---- 5. Clean old backups ----")
-    clean_backups(today)
+        print("---- 4. Update co-occurrence index ----")
+        with logger.time_step("update_cooccurrences"):
+            with Session(engine) as session:
+                update_cooccurrences(session, new_paper_keywords)
 
-    print(f"Job complete for {today}.")
+        print("---- 5. Clean old backups ----")
+        with logger.time_step("clean_backups"):
+            clean_backups(today)
+
+        print(f"Job complete for {today}.")
+
+    finally:
+        logger.write(LOG_DIR, today)
 
 
 if __name__ == "__main__":
@@ -139,9 +166,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     schedule.every().day.at("02:00").do(job)
-    
+
     print("Scheduler started; waiting for 2:00am...")
-    
+
     while True:
         schedule.run_pending()
         time.sleep(60)

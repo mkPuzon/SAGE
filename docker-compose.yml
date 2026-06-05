@@ -6,10 +6,12 @@ services:
     volumes:
       - ./data/db:/data/db
       - ./data/backups:/data/backups
+      - ./data/logs:/data/logs
     env_file: .env
     environment:
       - DB_PATH=/data/db/sage.db
       - BACKUP_DIR=/data/backups
+      - LOG_DIR=/data/logs
     restart: "no"
 
   api:

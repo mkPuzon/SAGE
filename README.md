@@ -274,17 +274,18 @@ Backend
 - [x] Implement incremental keyword cooccurnce updates instead of a total table rewrite
 - [X] Schedule deletion of backups; only keep last 4 days worth
 
-- [ ] Add logging across processor and db operations
-
-- [ ] Revise prompts for more explicitly structured definitions
-- [ ] Generate two definition: one technical, one accessable
-
+- [X] Add logging across processor and db operations
 
 Frontend
 - [X] Complete search page prototype 
-- [ ] Print full categories instead of tags
+- [X] Print full categories instead of tags
 
 
 # v3 Next steps
+- [ ] Revise prompts for more explicitly structured definitions
+- [ ] Generate two definition: one technical, one accessable
+
+- [ ] Measure API costs with current model selections
+
 - [ ] Add an term explore page (graph)
 - [ ] Run cost metrics for scraper and adjust model 
