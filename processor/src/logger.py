@@ -6,8 +6,8 @@ from contextlib import contextmanager
 # USD per 1M tokens — verify and update as OpenAI pricing changes
 MODEL_PRICING = {
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    "gpt-5.4-mini": {"input": 0.75, "output": 4.45},
+    "gpt-4.1-nano-2025-04-14": {"input": 0.10, "output": 0.40},
+    "gpt-5.4-mini-2026-03-17": {"input": 0.75, "output": 4.45},
     "gpt-5.4-nano": {"input": 0.20, "output": 1.25},
 }
 
