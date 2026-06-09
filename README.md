@@ -267,21 +267,8 @@ pytest tests/
 
 
 # TODOs
-# v2 Next steps
-Backend
-- [X] Complete search page functionality
-- [x] Add threshold of 2 papers for cooccurence; keywords that only occurr in the same paper 1 time are not added to the table.
-- [x] Implement incremental keyword cooccurnce updates instead of a total table rewrite
-- [X] Schedule deletion of backups; only keep last 4 days worth
 
-- [X] Add logging across processor and db operations
-
-Frontend
-- [X] Complete search page prototype 
-- [X] Print full categories instead of tags
-
-
-# v3 Next steps
+# v3 -- Double definitions 
 - [ ] Revise prompts for more explicitly structured definitions
 - [ ] Generate two definition: one technical, one accessable
 
