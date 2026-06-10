@@ -20,8 +20,8 @@ def _keyword_prompt() -> str:
 def _definition_prompt() -> str:
     return os.environ["DEFINTION_PROMPT_1"]
 
-_KEYWORD_MODEL = "gpt-4.1-nano"
-_DEFINITION_MODEL = "gpt-5.4-mini"
+_KEYWORD_MODEL = "gpt-5-nano"
+_DEFINITION_MODEL = "gpt-5-nano"
 
 # Feed at most this many characters of paper text to the definition model.
 # Keeps token costs predictable while covering the bulk of a typical paper.
