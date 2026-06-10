@@ -24,7 +24,8 @@ class Keyword(Base):
     __tablename__ = "keywords"
 
     keyword = Column(String, primary_key=True)
-    definition = Column(String)
+    definition_simple = Column(String)
+    definition_technical = Column(String)
     count = Column(Integer, default=0)
     paper_references = Column(JSON)
     dates = Column(JSON)

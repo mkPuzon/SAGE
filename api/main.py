@@ -57,7 +57,8 @@ def get_keyword(keyword: str):
 
         return {
             "keyword": kw.keyword,
-            "definition": kw.definition,
+            "definition_simple": kw.definition_simple,
+            "definition_technical": kw.definition_technical,
             "count": kw.count,
             "articles": articles,
         }

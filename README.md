@@ -36,7 +36,7 @@ A one-shot Python script that runs the full data pipeline scheduled with the Pyt
 **Environment** (injected via `env_file: .env` in Compose):
 - `OPENAI_KEY` — OpenAI API key
 - `KEYWORD_PROMPT_1` — prompt template for keyword extraction
-- `DEFINTION_PROMPT_1` — prompt template for definition extraction
+- `DEFINTION_PROMPT_1` — prompt template for definition extraction; instructs the model to return both a `simple` (general audience) and `technical` (practitioner) definition per keyword
 
 Not needed in `.env` file, but good to know:
 - `DB_PATH` — absolute path to the SQLite file inside the container (`/data/db/sage.db`)
@@ -53,7 +53,7 @@ The `api` container is not exposed directly to the host. All traffic reaches it 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/keywords?q=<query>` | Case-insensitive substring search across keyword names. Returns up to 20 results ordered by `count` descending. |
-| `GET` | `/api/keywords/{keyword}` | Full keyword record with definition, count, and joined article metadata for every paper that references it. Returns 404 if not found. |
+| `GET` | `/api/keywords/{keyword}` | Full keyword record with `definition_simple`, `definition_technical`, count, and joined article metadata for every paper that references it. Returns 404 if not found. |
 | `GET` | `/api/keywords/{keyword}/related` | Up to 10 related keywords ordered by co-occurrence score descending. Returns `[]` if none exist. |
 | `GET` | `/health` | Liveness check — returns `{"status": "ok"}`. |
 
@@ -85,7 +85,7 @@ The frontend files are copied into the image at build time, not mounted at runti
 
 `shared/models.py` is the source for the database schema. Both `processor` and `api` import from it; each Dockerfile copies the `shared/` directory into its image.
 
-SQLAlchemy 2.x with SQLite is used. The `get_engine()` function creates the engine and runs `CREATE TABLE IF NOT EXISTS` for both tables on startup.
+SQLAlchemy 2.x with SQLite is used. The `get_engine()` function creates the engine and runs `CREATE TABLE IF NOT EXISTS` for all tables on startup.
 
 ### Schema
 
@@ -107,11 +107,15 @@ SQLAlchemy 2.x with SQLite is used. The `get_engine()` function creates the engi
 | Column | Type | Notes |
 |--------|------|-------|
 | `keyword` | `TEXT` PK | Term in title case, e.g. `"Transformer Architecture"` |
-| `definition` | `TEXT` | LLM-generated plain-English definition |
+| `definition_simple` | `TEXT` | LLM-generated plain-English definition for a general audience |
+| `definition_technical` | `TEXT` | LLM-generated advanced definition for AI practitioners |
 | `count` | `INTEGER` | Number of times this keyword has been extracted across all papers |
 | `paper_references` | `JSON` | List of `paper_id` strings that reference this keyword |
+| `dates` | `JSON` | List of ISO submission dates for each paper that references this keyword |
 
-`tags` and `paper_references` are stored as JSON strings in SQLite (SQLAlchemy's `JSON` type handles serialization transparently). When upserting a keyword that already exists, `count` is incremented and `paper_references` is merged as a set to prevent duplicates.
+`tags`, `paper_references`, and `dates` are stored as JSON strings in SQLite (SQLAlchemy's `JSON` type handles serialization transparently). When upserting a keyword that already exists, `count` is incremented and `paper_references` is merged as a set to prevent duplicates; `dates` accumulates all submission dates (duplicates allowed, enabling frequency analysis).
+
+`definition_simple` and `definition_technical` are only set on first insert and never updated when a keyword is seen in a subsequent paper.
 
 **`keyword_cooccurrences` table**
 
@@ -223,7 +227,19 @@ The extracted paper text, along with the keyword list, is sent to **`gpt-5.4-min
 DEFINTION_PROMPT_1 + str(keywords) + "\n\nHere is the paper text:\n" + paper_text[:15000]
 ```
 
-The model returns a Python dict mapping each keyword to a definition string. The same `ast.literal_eval` parsing is applied. A normalization step (`_flatten_definition`) handles cases where the model returns nested dicts (e.g. `{'definition': '...', 'importance': '...'}`) by extracting the `definition` key or joining all values.
+The prompt instructs the model to return a nested Python dict — each keyword maps to a dict with `"simple"` and `"technical"` keys:
+
+```python
+{
+  'State Space Model': {
+    'simple': 'A type of model that...',
+    'technical': 'A sequence model that represents...'
+  },
+  ...
+}
+```
+
+The same `ast.literal_eval` parsing is applied. A normalization step (`_flatten_definition`) handles malformed values (plain strings, `None`, nested dicts from prompt drift). `extract_definitions` returns a 4-tuple `(simple_defs, technical_defs, model_name, usage)`.
 
 ### Step 5 — Upsert to database
 
@@ -268,11 +284,16 @@ pytest tests/
 
 # TODOs
 
-# v3 -- Double definitions 
-- [ ] Revise prompts for more explicitly structured definitions
-- [ ] Generate two definition: one technical, one accessable
+# v2.1.1 -- Double definitions 
+- [X] Revise prompts for more explicitly structured definitions
+- [X] Generate two definition: one technical, one accessable
+- [X] Remove support for `definition` in db table and API
 
+- [ ] Update interface
+
+- [ ] Revise and split up README info across .md docs
 - [ ] Measure API costs with current model selections
 
+## v2.3.1
+
 - [ ] Add an term explore page (graph)
-- [ ] Run cost metrics for scraper and adjust model 

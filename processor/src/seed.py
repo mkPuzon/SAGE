@@ -84,7 +84,13 @@ SEED_ARTICLES = [
 SEED_KEYWORDS = [
     {
         "keyword": "Transformer Architecture",
-        "definition": (
+        "definition_simple": (
+            "A neural network design that uses self-attention mechanisms to process "
+            "sequential data in parallel, rather than step-by-step. It became the "
+            "foundation for modern AI language models and is central to virtually "
+            "every state-of-the-art AI system today."
+        ),
+        "definition_technical": (
             "A neural network design that uses self-attention mechanisms to process "
             "sequential data in parallel, rather than step-by-step. It became the "
             "foundation for modern AI language models and is central to virtually "
@@ -94,7 +100,13 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Self-Attention",
-        "definition": (
+        "definition_simple": (
+            "A mechanism that allows a model to weigh the importance of different "
+            "parts of its input when producing an output. It lets the model relate "
+            "every word (or token) to every other word in a sequence, capturing "
+            "long-range dependencies that older models struggled with."
+        ),
+        "definition_technical": (
             "A mechanism that allows a model to weigh the importance of different "
             "parts of its input when producing an output. It lets the model relate "
             "every word (or token) to every other word in a sequence, capturing "
@@ -104,7 +116,13 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Pre-training",
-        "definition": (
+        "definition_simple": (
+            "The process of training a model on a large general dataset before "
+            "fine-tuning it on a specific task. Pre-training allows models to learn "
+            "broad knowledge from vast amounts of text, which can then be adapted "
+            "cheaply to specialized applications."
+        ),
+        "definition_technical": (
             "The process of training a model on a large general dataset before "
             "fine-tuning it on a specific task. Pre-training allows models to learn "
             "broad knowledge from vast amounts of text, which can then be adapted "
@@ -114,7 +132,13 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Large Language Model",
-        "definition": (
+        "definition_simple": (
+            "An AI model trained on massive amounts of text data with billions of "
+            "parameters. These models learn statistical patterns in language and can "
+            "generate, summarize, translate, and reason about text. GPT and BERT "
+            "are prominent examples."
+        ),
+        "definition_technical": (
             "An AI model trained on massive amounts of text data with billions of "
             "parameters. These models learn statistical patterns in language and can "
             "generate, summarize, translate, and reason about text. GPT and BERT "
@@ -124,7 +148,12 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Few-Shot Learning",
-        "definition": (
+        "definition_simple": (
+            "A model's ability to perform a new task given only a handful of "
+            "examples, without additional training. Large language models can do "
+            "this by learning patterns across many tasks during pre-training."
+        ),
+        "definition_technical": (
             "A model's ability to perform a new task given only a handful of "
             "examples, without additional training. Large language models can do "
             "this by learning patterns across many tasks during pre-training."
@@ -133,7 +162,12 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Vision Transformer",
-        "definition": (
+        "definition_simple": (
+            "An adaptation of the Transformer architecture for image recognition "
+            "tasks. Images are split into fixed-size patches, which are then treated "
+            "like word tokens and fed into a standard Transformer encoder."
+        ),
+        "definition_technical": (
             "An adaptation of the Transformer architecture for image recognition "
             "tasks. Images are split into fixed-size patches, which are then treated "
             "like word tokens and fed into a standard Transformer encoder."
@@ -142,7 +176,13 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Chain-of-Thought Prompting",
-        "definition": (
+        "definition_simple": (
+            "A prompting technique where the model is asked to show its reasoning "
+            "step-by-step before giving a final answer. This significantly improves "
+            "performance on complex reasoning tasks by encouraging intermediate "
+            "logical steps."
+        ),
+        "definition_technical": (
             "A prompting technique where the model is asked to show its reasoning "
             "step-by-step before giving a final answer. This significantly improves "
             "performance on complex reasoning tasks by encouraging intermediate "
@@ -152,7 +192,13 @@ SEED_KEYWORDS = [
     },
     {
         "keyword": "Fine-tuning",
-        "definition": (
+        "definition_simple": (
+            "Continuing to train a pre-trained model on a smaller, task-specific "
+            "dataset to adapt its general capabilities to a particular problem. "
+            "Fine-tuning typically requires far less data and compute than training "
+            "from scratch."
+        ),
+        "definition_technical": (
             "Continuing to train a pre-trained model on a smaller, task-specific "
             "dataset to adapt its general capabilities to a particular problem. "
             "Fine-tuning typically requires far less data and compute than training "
@@ -175,7 +221,8 @@ def upsert_keyword(session: Session, kw_data: dict) -> None:
         session.add(
             Keyword(
                 keyword=kw_data["keyword"],
-                definition=kw_data["definition"],
+                definition_simple=kw_data.get("definition_simple"),
+                definition_technical=kw_data.get("definition_technical"),
                 count=1,
                 paper_references=kw_data["paper_references"],
                 dates=kw_data.get("dates", []),

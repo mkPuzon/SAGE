@@ -16,7 +16,7 @@ from src.scraper import fetch_arxiv_papers
 from src.pdf_reader import download_and_extract_text
 from src.extractor import extract_keywords, extract_definitions
 from src.seed import upsert_keyword
-from src.cooccurrence import rebuild_cooccurrences, update_cooccurrences
+from src.cooccurrence import update_cooccurrences
 from src.logger import RunLogger
 
 DB_PATH = os.getenv("DB_PATH", "/data/db/sage.db")
@@ -68,19 +68,19 @@ def process_paper(paper: dict, engine, logger: RunLogger) -> list[str] | None:
 
     print("    → extracting definitions")
     with logger.time_paper_step(paper_id, "extract_definitions"):
-        definitions, def_model, def_usage = extract_definitions(pdf_text, keywords)
+        definitions_simple, definitions_technical, def_model, def_usage = extract_definitions(pdf_text, keywords)
     logger.record_openai_usage("extract_definitions", paper_id, def_model, def_usage)
 
     with logger.time_paper_step(paper_id, "db_upsert"):
         with Session(engine) as s:
             s.add(Article(**paper))
             for kw in keywords:
-                definition = definitions.get(kw)
                 upsert_keyword(
                     s,
                     {
                         "keyword": kw,
-                        "definition": definition or "Definition not available.",
+                        "definition_simple": definitions_simple.get(kw),
+                        "definition_technical": definitions_technical.get(kw),
                         "paper_references": [paper_id],
                         "dates": [paper["date_submitted"]],
                     },
@@ -94,7 +94,7 @@ def process_paper(paper: dict, engine, logger: RunLogger) -> list[str] | None:
 def job():
     today = dt.datetime.today().strftime("%Y-%m-%d")
     run_id = dt.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
-    num_papers = 25
+    num_papers = 250
     print(f"Running job to scrape {num_papers} papers for {today}...")
 
     logger = RunLogger(run_id)
@@ -148,14 +148,6 @@ def job():
 
 if __name__ == "__main__":
     import schedule
-
-    # One-time reconciliation: full rebuild at the 2-paper threshold, one-shot
-    # never part of the scheduled job
-    # if len(sys.argv) > 1 and sys.argv[1] == "reconcile-cooccurrences":
-    #     engine = get_engine(DB_PATH)
-    #     with Session(engine) as session:
-    #         rebuild_cooccurrences(session, threshold=2)
-    #     sys.exit(0)
 
     try:
         job()

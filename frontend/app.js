@@ -249,13 +249,26 @@ function renderDetail(data) {
     )
     .join("");
 
+  const hasNewDefs = data.definition_simple && data.definition_technical;
+  const definitionHtml = hasNewDefs
+    ? `<div class="definition-toggle">
+        <button class="def-toggle-btn active" data-mode="simple">Simple</button>
+        <button class="def-toggle-btn" data-mode="technical">Technical</button>
+       </div>
+       <p class="detail-definition"
+          data-simple="${escapeAttr(data.definition_simple)}"
+          data-technical="${escapeAttr(data.definition_technical)}">
+         ${escapeHtml(data.definition_simple)}
+       </p>`
+    : `<p class="detail-definition"></p>`;
+
   detailPanel.innerHTML = `
     <div class="modal-main">
       <div class="detail-header">
         <h2 class="detail-title">${escapeHtml(data.keyword)}</h2>
         <span class="detail-count">${data.count} paper${data.count !== 1 ? "s" : ""}</span>
       </div>
-      <p class="detail-definition">${escapeHtml(data.definition || "")}</p>
+      ${definitionHtml}
       ${
         articleCards
           ? `<p class="articles-heading">Referenced in</p>
@@ -270,6 +283,14 @@ function renderDetail(data) {
     <button class="close-btn">&times;</button>
   `;
   detailPanel.querySelector(".close-btn").addEventListener("click", closeModal);
+  detailPanel.querySelectorAll(".def-toggle-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      detailPanel.querySelectorAll(".def-toggle-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const defEl = detailPanel.querySelector(".detail-definition");
+      defEl.textContent = defEl.dataset[btn.dataset.mode];
+    });
+  });
   modalOverlay.classList.remove("hidden");
   fetchRelatedTerms(data.keyword);
 }

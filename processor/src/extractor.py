@@ -64,8 +64,10 @@ def _flatten_definition(value) -> str | None:
     return str(value)
 
 
-def extract_definitions(paper_text: str, keywords: list[str]) -> tuple[dict[str, str | None], str, object]:
-    """Return (definitions, model_name, usage) derived from the full paper text."""
+def extract_definitions(
+    paper_text: str, keywords: list[str]
+) -> tuple[dict[str, str | None], dict[str, str | None], str, object]:
+    """Return (simple_defs, technical_defs, model_name, usage) derived from the full paper text."""
     truncated = paper_text[:_MAX_PAPER_CHARS]
     prompt = (
         _definition_prompt()
@@ -82,4 +84,16 @@ def extract_definitions(paper_text: str, keywords: list[str]) -> tuple[dict[str,
     result = _parse_llm_response(raw)
     if not isinstance(result, dict):
         raise ValueError(f"Expected dict from definition model, got: {type(result)}")
-    return {k: _flatten_definition(v) for k, v in result.items()}, response.model, response.usage
+
+    simple: dict[str, str | None] = {}
+    technical: dict[str, str | None] = {}
+    for kw in keywords:
+        entry = result.get(kw) or {}
+        if isinstance(entry, dict):
+            simple[kw] = _flatten_definition(entry.get("simple"))
+            technical[kw] = _flatten_definition(entry.get("technical"))
+        else:
+            # Fallback if model returns a plain string instead of a nested dict
+            simple[kw] = _flatten_definition(entry)
+            technical[kw] = None
+    return simple, technical, response.model, response.usage
