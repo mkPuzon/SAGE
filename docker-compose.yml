@@ -4,26 +4,32 @@ services:
       context: .
       dockerfile: processor/Dockerfile
     volumes:
-      - ./data/db:/data/db
-      - ./data/backups:/data/backups
-      - ./data/logs:/data/logs
+      - db_data:/data/db
+      - backup_data:/data/backups
+      - log_data:/data/logs
     env_file: .env
     environment:
       - DB_PATH=/data/db/sage.db
       - BACKUP_DIR=/data/backups
       - LOG_DIR=/data/logs
-    restart: "no"
+    restart: unless-stopped
 
   api:
     build:
       context: .
       dockerfile: api/Dockerfile
     volumes:
-      - ./data/db:/data/db
+      - db_data:/data/db
     environment:
       - DB_PATH=/data/db/sage.db
     # expose:
     #   - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       - processor
 
@@ -34,4 +40,10 @@ services:
     # ports:
       # - "8080:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  backup_data:
+  log_data:
