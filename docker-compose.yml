@@ -22,8 +22,8 @@ services:
       - ./data/db:/data/db
     environment:
       - DB_PATH=/data/db/sage.db
-    expose:
-      - "8000"
+    # expose:
+    #   - "8000"
     depends_on:
       - processor
 
@@ -31,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: nginx/Dockerfile
-    ports:
-      - "8080:80"
+    # ports:
+      # - "8080:80"
     depends_on:
       - api
