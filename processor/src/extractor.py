@@ -10,7 +10,7 @@ _client: OpenAI | None = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(api_key=os.environ["OPENAI_KEY"])
+        _client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     return _client
 
 def _keyword_prompt() -> str:
@@ -18,7 +18,7 @@ def _keyword_prompt() -> str:
 
 
 def _definition_prompt() -> str:
-    return os.environ["DEFINTION_PROMPT_1"]
+    return os.environ["DEFINITION_PROMPT_1"]
 
 _KEYWORD_MODEL = "gpt-5-nano"
 _DEFINITION_MODEL = "gpt-5-nano"
