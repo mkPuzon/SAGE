@@ -40,7 +40,7 @@ def extract_keywords(abstract: str) -> tuple[list[str], str, object]:
     response = _get_client().chat.completions.create(
         model=_KEYWORD_MODEL,
         messages=[{"role": "user", "content": _keyword_prompt() + abstract}],
-        temperature=0,
+        temperature=1,
     )
     raw = response.choices[0].message.content.strip()
     result = _parse_llm_response(raw)
@@ -78,7 +78,7 @@ def extract_definitions(
     response = _get_client().chat.completions.create(
         model=_DEFINITION_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0,
+        temperature=1,
     )
     raw = response.choices[0].message.content.strip()
     result = _parse_llm_response(raw)
