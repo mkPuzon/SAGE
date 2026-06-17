@@ -288,10 +288,13 @@ function renderDetail(data) {
       detailPanel.querySelectorAll(".def-toggle-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const defEl = detailPanel.querySelector(".detail-definition");
-      defEl.textContent = defEl.dataset[btn.dataset.mode];
+      defEl.innerHTML = escapeHtml(defEl.dataset[btn.dataset.mode]);
+      renderMath(defEl);
     });
   });
   modalOverlay.classList.remove("hidden");
+  const defEl = detailPanel.querySelector(".detail-definition");
+  if (defEl) renderMath(defEl);
   fetchRelatedTerms(data.keyword);
 }
 
@@ -314,6 +317,20 @@ async function fetchRelatedTerms(keyword) {
   }
 }
 
+
+const MATH_OPTS = {
+  delimiters: [
+    { left: "$$", right: "$$", display: true },
+    { left: "$",  right: "$",  display: false },
+    { left: "\\(", right: "\\)", display: false },
+    { left: "\\[", right: "\\]", display: true },
+  ],
+  throwOnError: false,
+};
+
+function renderMath(el) {
+  if (typeof renderMathInElement === "function") renderMathInElement(el, MATH_OPTS);
+}
 
 function escapeHtml(str) {
   return String(str)
