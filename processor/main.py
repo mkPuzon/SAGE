@@ -22,6 +22,7 @@ from src.logger import RunLogger
 DB_PATH = os.getenv("DB_PATH", "/data/db/sage.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/data/backups")
 LOG_DIR = os.getenv("LOG_DIR", "/data/logs")
+CAPTURE_DEFINITIONS = os.getenv("CAPTURE_DEFINITIONS", "").lower() in ("1", "true", "yes")
 
 
 def backup_db(today: str) -> None:
@@ -68,7 +69,9 @@ def process_paper(paper: dict, engine, logger: RunLogger) -> list[str] | None:
 
     print("    → extracting definitions")
     with logger.time_paper_step(paper_id, "extract_definitions"):
-        definitions_simple, definitions_technical, def_model, def_usage = extract_definitions(pdf_text, keywords)
+        definitions_simple, definitions_technical, def_model, def_usage = extract_definitions(
+            pdf_text, keywords, paper_id=paper_id, capture=CAPTURE_DEFINITIONS
+        )
     logger.record_openai_usage("extract_definitions", paper_id, def_model, def_usage)
 
     with logger.time_paper_step(paper_id, "db_upsert"):
@@ -91,11 +94,23 @@ def process_paper(paper: dict, engine, logger: RunLogger) -> list[str] | None:
     return keywords
 
 
+def reset_db() -> None:
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+        print(f"  Deleted existing DB at {DB_PATH}")
+    else:
+        print(f"  No DB found at {DB_PATH} — nothing to delete")
+
+
 def job():
     today = dt.datetime.today().strftime("%Y-%m-%d")
     run_id = dt.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
-    num_papers = 250
+    num_papers = 5
     print(f"Running job to scrape {num_papers} papers for {today}...")
+
+    if os.getenv("NEW_DB") == "1":
+        print("---- 0. NEW_DB=1: resetting database ----")
+        reset_db()
 
     logger = RunLogger(run_id)
 

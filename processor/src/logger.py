@@ -9,6 +9,7 @@ MODEL_PRICING = {
     "gpt-5-nano": {"input": 0.05, "output": 0.40},
     "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
     "gpt-5.4-mini": {"input": 0.75, "output": 4.45},
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
 }
 
 

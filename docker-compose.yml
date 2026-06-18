@@ -12,6 +12,7 @@ services:
       - DB_PATH=/data/db/sage.db
       - BACKUP_DIR=/data/backups
       - LOG_DIR=/data/logs
+      - NEW_DB=${NEW_DB:-}
     restart: unless-stopped
 
   api:
