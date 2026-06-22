@@ -138,13 +138,11 @@ Two keywords are considered related if they were both extracted from **at least 
 
 ### How the index is updated
 
-Each daily processor job updates the index **incrementally** via `update_cooccurrences` in `processor/src/cooccurrence.py`, rather than rebuilding the whole table:
+Each daily processor job updates the index incrementally via `update_cooccurrences` in `processor/src/cooccurrence.py`:
 
 1. **Find affected pairs** — only pairs of keywords that appear together in a *newly added* paper can change, because papers are never removed and a pair's shared-paper count only ever increases. The job collects each new paper's keyword set and generates the candidate (A, B) pairs.
 2. **Recompute authoritative scores** — for each affected pair, the true score is recomputed as the size of the set intersection of the two keywords' `paper_references` (already committed by the keyword upsert). This is idempotent and self-correcting, so duplicate pairs within a batch are harmless.
 3. **Upsert if ≥ threshold** — a pair's row (both `(A, B)` and `(B, A)`, so every API query is a simple `WHERE keyword_a = ?`) is written only when its score reaches 2. Sub-threshold pairs were never stored, so nothing needs to be deleted.
-
-`rebuild_cooccurrences(session, threshold=2)` still performs a full wipe-and-rewrite and is used for seeding and for the one-time reconciliation command (`python main.py reconcile-cooccurrences`), which purges any legacy score-1 rows from an existing DB. All of this runs offline (inside the processor), never on the request path.
 
 ### Scaling characteristics
 
@@ -281,19 +279,4 @@ pytest tests/
 - Keyword upsert deduplicating `paper_references` when the same paper_id appears twice
 - New keywords starting with `count == 1`
 
-
-# TODOs
-
-# v2.1.1 -- Double definitions 
-- [X] Revise prompts for more explicitly structured definitions
-- [X] Generate two definition: one technical, one accessable
-- [X] Remove support for `definition` in db table and API
-
-- [ ] Update interface
-
-- [ ] Revise and split up README info across .md docs
-- [ ] Measure API costs with current model selections
-
-## v2.3.1
-
-- [ ] Add an term explore page (graph)
+NOTE: To run the Docker compose project locally use: `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d`

@@ -105,7 +105,7 @@ def reset_db() -> None:
 def job():
     today = dt.datetime.today().strftime("%Y-%m-%d")
     run_id = dt.datetime.today().strftime("%Y-%m-%dT%H:%M:%S")
-    num_papers = 5
+    num_papers = 250
     print(f"Running job to scrape {num_papers} papers for {today}...")
 
     if os.getenv("NEW_DB") == "1":
